@@ -1,2 +1,3 @@
 # UDSOverJ1939
-Sending UDS frame over J1939 protocol
+Sending UDS frame using J1939 protocol
+PGN 0xDA00
