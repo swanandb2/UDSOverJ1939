@@ -1,27 +1,32 @@
 #include <time.h>
 #include "tp.h"
 
-
 int g_socketID = 0;
 int start, end;
 
-int TxData(int socket, int nSize, unsigned char* data)
+int g_nToolAddress = 0xF9;
+int g_nECUAddress = 0x33;
+int g_nPGN = 0xDA; //PGN for sending UDS request over J1939, Phy request
+
+int TxData(int nSize, unsigned char* data)
 {
 	if (nSize > 0 && nSize < 8)
 	{
 		struct can_frame frame;
-		int iIndex = 2;
-		frame.can_id = frame.can_id << 8 | data[0]; //Append destination address
-		frame.can_id = frame.can_id << 8 | data[1]; //Append source address
+		
+		frame.can_id = 0x18DA;
+		frame.can_id = frame.can_id << 8 | g_nECUAddress; //Append destination address
+		frame.can_id = frame.can_id << 8 | g_nToolAddress; //Append source address
 		frame.can_id = frame.can_id | CAN_EFF_FLAG;
+		
 		printf("TxData socket %d nSize: %d %X\n", socket, nSize, frame.can_id);
-		frame.can_dlc = 3;
-		for (; iIndex < nSize; iIndex++)
+		frame.can_dlc = nSize;
+		for (int iIndex = 0; iIndex <= nSize; iIndex++)
 		{
-			frame.data[iIndex - 2] = data[iIndex];
-			printf("TxData socket frame.data[%d] = %x\n", iIndex - 2, data[iIndex]);
+			frame.data[iIndex] = data[iIndex];
+			printf("TxData socket frame.data[%d] = %x\n", iIndex, data[iIndex]);
 		}
-		return write(socket, &frame, sizeof(struct can_frame));
+		return write(g_socketID, &frame, sizeof(struct can_frame));
 	}
 	else
 	{
@@ -30,14 +35,14 @@ int TxData(int socket, int nSize, unsigned char* data)
 
 }
 
-int RxData(int socket, unsigned char* buffer)
+int RxData(unsigned char* buffer)
 {
 	struct can_frame frame;
-	int nbytes = read(socket, &frame, sizeof(struct can_frame));
+	int nbytes = read(g_socketID, &frame, sizeof(struct can_frame));
 	if (nbytes != sizeof(frame))
 	{
 		perror("read socket");
-		return 1;
+		return 0;
 	}
 	else
 	{
@@ -49,6 +54,19 @@ int RxData(int socket, unsigned char* buffer)
 			int nSrc = CanID & 0xFF;
 			int nDest = CanID >> 8 & 0xFF;
 			int PGN = CanID >> 16 & 0xFF;
+			if (nSrc == g_nECUAddress && nDest == g_nToolAddress && PGN == g_nPGN)
+			{
+				for (int i = 0; i < frame.can_dlc; i++)
+				{
+					buffer[i] = frame.data[i];
+				}
+				return frame.can_dlc;
+			}
+			else
+			{
+				return 0;
+			}
+
 			printf("TxData PGN = %x SA: %x DA: %x \n", PGN, frame.can_id, nSrc, nDest);
 		}
 	}
@@ -84,41 +102,78 @@ int TPInit()
 	return 0;
 }
 
-int HandleRespBlock(int SA, int DA)
-{
 
+void ResetTimer()
+{
+	start = clock() * 1000;
+	end = start + 30000; //Set 3 second time out
 }
 
-int TPExecuteRequest(int nMsgSize, unsigned char* pMsgData, int &RespSize, unsigned char** pRespData)
+int TxFlowControl()
 {
-	start = clock() * 1000 / CLOCKS_PER_SEC;
-	end = start + 5000; //Set 5 second time out
-	TP_STATE state = READY;
+	unsigned char sData[] = { 0x30, 0x00, 0x05, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+	return TxData(sizeof(sData), sData);
+}
+
+//TBD 0x7F NRC 78 and 21
+std::vector<unsigned char> TPExecuteRequest(int nMsgSize, unsigned char* pMsgData)
+{
+	ResetTimer(); // CLOCKS_PER_SEC;	
 	bool bFullRespRx = false;
-	TxData(g_socketID, nMsgSize, pMsgData);
-	state = WAITING_FOR_RESP;
+	TxData(nMsgSize, pMsgData);
+	unsigned char rxBuff[8];	
+	int RespSize = 0;
+	std::vector<unsigned char> vrxData;	
 	do
 	{
-		switch (state)
+		int nData = RxData(rxBuff);		
+		if (nData > 0 && nData <= 8)
 		{
-
-		case FF_RX:
+			int FrameType = rxBuff[0] & 0xF0;
+			switch (FrameType)
+			{
+				case SINGLE_FRAME:
+				{
+					//TBD
+					
+				}
+				break;
+				case FIRST_FRAME:
+				{
+					//UUDT
+					RespSize = rxBuff[1];
+					//Set offce as 2 Frame ID and size
+					for (size_t i = 2; i < nData; i++)
+					{
+						vrxData.push_back(rxBuff[i]);
+					}
+					if (TxFlowControl())
+					{
+						ResetTimer();
+					}
+					
+				}
+				break;
+				case CONSECUTIVE_FRAME:
+				{
+					for (size_t i = 1; i < nData; i++)
+					{
+						vrxData.push_back(rxBuff[i]);
+					}
+				}
+				default:
+					break;
+			}
+		}
+		if (RespSize == vrxData.size())
 		{
-
+			bFullRespRx = true;
 		}
-		break;
-		case FC_SEND:
-		{
-
-		}
-		break;
-		case WAITING_FOR_RESP:
-		{
-
-		}
-		break;
-		default:
-			break;
-		}
+		printf("In loop");
 	} while (start <= end && bFullRespRx != true);
+
+	if (!bFullRespRx && start >= end)
+	{
+		printf("Timeout Error occur, No response from ECU");
+	}
 }

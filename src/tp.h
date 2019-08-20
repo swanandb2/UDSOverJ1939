@@ -11,9 +11,11 @@
 
 #include <linux/can.h>
 #include <linux/can/raw.h>
-int TxData(int socket, int nSize, unsigned char* data);
-int RxData(int socket, unsigned char* buffer);
+#include<vector>
+int TxData(int nSize, unsigned char* data);
+int RxData(unsigned char* buffer);
 int TPInit();
+std::vector<unsigned char> TPExecuteRequest(int nMsgSize, unsigned char* pMsgData);
 
 #define MESSAGE_MAX_LENGTH   255
 #define CAN_DATAFRAME_LENGTH   8
@@ -23,12 +25,4 @@ int TPInit();
 #define FIRST_FRAME         0x10
 #define CONSECUTIVE_FRAME   0x20
 #define FLOW_CONTROL        0x30
-
-typedef enum _TP_STATES
-{
-	READY,
-	FF_RX,
-	FC_SEND,
-	WAITING_FOR_RESP	
-}TP_STATE;
 #endif //J1939_TP_SERVICES_H
