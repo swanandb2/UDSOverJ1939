@@ -22,10 +22,12 @@ int main(void)
 		signal(SIGKILL, sig_handler);
 		//ATP layer init properly
 		bKeepMonitoring = true;
-		while (bKeepMonitoring)
-		{
-			std::vector<DTC> dtcList = GetActiveDTCs();
-		}	
+		std::vector<DTC> dtcList = GetActiveDTCs();
+		// while (bKeepMonitoring)
+		// {
+			
+			// sleep(2); //Allow 1 second for cleanup
+		// }	
 
 	}
 	else

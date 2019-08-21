@@ -1,4 +1,5 @@
 #include <time.h>
+#include <fcntl.h>
 #include "tp.h"
 
 int g_socketID = 0;
@@ -99,6 +100,13 @@ int TPInit()
 		perror("Error in socket bind");
 		return -2;
 	}
+	
+	//Why we can not set non blocking socket? It throws error "read socket: Resource temporarily unavailable"????
+	//fcntl(g_socketID, F_SETFL, O_NONBLOCK);
+	/*struct timeval tv;
+	tv.tv_sec = 0; //Timeout in seconds
+	tv.tv_usec = 10000;
+	setsockopt(g_socketID, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);*/
 	return 0;
 }
 
@@ -126,7 +134,9 @@ std::vector<unsigned char> TPExecuteRequest(int nMsgSize, unsigned char* pMsgDat
 	std::vector<unsigned char> vrxData;	
 	do
 	{
+		printf("************ Before RxData \n");
 		int nData = RxData(rxBuff);		
+		printf("************ After RxData Size: %d \n", nData);
 		if (nData > 0 && nData <= 8)
 		{
 			int FrameType = rxBuff[0] & 0xF0;
@@ -170,10 +180,11 @@ std::vector<unsigned char> TPExecuteRequest(int nMsgSize, unsigned char* pMsgDat
 			bFullRespRx = true;
 		}
 		printf("In loop");
-	} while (start <= end && bFullRespRx != true);
+	} while (start < end && bFullRespRx != true);
 
 	if (!bFullRespRx && start >= end)
 	{
 		printf("Timeout Error occur, No response from ECU");
 	}
+	return vrxData;
 }
