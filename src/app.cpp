@@ -55,12 +55,13 @@ std::vector<DTC> GetActiveDTCs()
 			//printf("%X %X %X %X\n", vTPResp[nDataOffet + 4*i], vTPResp[nDataOffet + 4*i+1], vTPResp[nDataOffet + 4*i+2], vTPResp[nDataOffet + 4*i+3]);
 			//printf("*************************************\n");
 			printf("DTC ID: %d Status: %d\n", dtc.m_nID, dtc.m_nStatus);
+			dtcList.push_back(dtc);
 		}
 
 	}
-else
-{
-printf("No data from Tp layer");
-}
+	else
+	{
+		printf("No data from Tp layer");
+	}
 	
 }
