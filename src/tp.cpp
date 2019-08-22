@@ -3,15 +3,13 @@
 #include "tp.h"
 
 int g_socketID = 0;
-int start, end;
-
 int g_nToolAddress = 0xF9;
 int g_nECUAddress = 0x33;
 int g_nPGN = 0xDA; //PGN for sending UDS request over J1939, Phy request
 
 int TxData(int nSize, unsigned char* data)
 {
-	if (nSize > 0 && nSize < 8)
+	if (nSize > 1 && nSize <= 8)
 	{
 		struct can_frame frame;
 		
@@ -51,7 +49,6 @@ int RxData(unsigned char* buffer)
 		{
 			//0x18DAF955
 			int CanID = frame.can_id & CAN_EFF_MASK;
-			printf("%08X%d\n", CanID, frame.can_dlc);
 			int nSrc = CanID & 0xFF;
 			int nDest = CanID >> 8 & 0xFF;
 			int PGN = CanID >> 16 & 0xFF;
@@ -111,14 +108,9 @@ int TPInit()
 }
 
 
-void ResetTimer()
-{
-	start = clock() * 1000;
-	end = start + 30000; //Set 3 second time out
-}
-
 int TxFlowControl()
 {
+	
 	unsigned char sData[] = { 0x30, 0x00, 0x05, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
 	return TxData(sizeof(sData), sData);
 }
@@ -134,21 +126,24 @@ void printBuffer(unsigned char* buffer, int nSize)
 
 //TBD 0x7F NRC 78 and 21
 std::vector<unsigned char> TPExecuteRequest(int nMsgSize, unsigned char* pMsgData)
-{
-	ResetTimer(); // CLOCKS_PER_SEC;	
+{	
 	bool bFullRespRx = false;
 	TxData(nMsgSize, pMsgData);
 	unsigned char rxBuff[8];	
 	int RespSize = 0;
-	std::vector<unsigned char> vrxData;	
+	std::vector<unsigned char> vrxData;
+	printf("Before Execute loop\n");	
+	clock_t start_time = clock(); 
+	clock_t end_time; 
+	float fTimeOut = 6000.0;
+	float fTimeElapse = 0;
 	do
-	{
+	{	
 		int nData = RxData(rxBuff);	
 		if (nData > 0)
 		{
-			printBuffer(rxBuff, sizeof(rxBuff));
+			//printBuffer(rxBuff, sizeof(rxBuff));
 			int FrameType = rxBuff[0] & 0xF0;
-			printf("%x", FrameType);
 			switch (FrameType)
 			{
 				case SINGLE_FRAME:
@@ -167,10 +162,11 @@ std::vector<unsigned char> TPExecuteRequest(int nMsgSize, unsigned char* pMsgDat
 					{
 						vrxData.push_back(rxBuff[i]);
 					}
-					if (TxFlowControl())
-					{
-						ResetTimer();
-					}
+					//printf("Tx FlowControl Before");
+					unsigned char sData[] = { 0x30, 0x00, 0x05, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+					TxData(sizeof(sData), sData);
+					//printf("Tx FlowControl After");
+
 					
 				}
 				break;
@@ -181,19 +177,23 @@ std::vector<unsigned char> TPExecuteRequest(int nMsgSize, unsigned char* pMsgDat
 						vrxData.push_back(rxBuff[i]);
 					}
 				}
+				break;
 				default:
 					break;
 			}
+			if (RespSize <= vrxData.size() && fTimeElapse < fTimeOut)
+			{
+				bFullRespRx = true;
+			}
 		}
-		if (RespSize == vrxData.size())
-		{
-			bFullRespRx = true;
-		}
-	} while (start < end && bFullRespRx != true);
-
-	if (!bFullRespRx && start >= end)
+		end_time = clock() - start_time;
+		fTimeElapse = (float)end_time/CLOCKS_PER_SEC;
+		printf("Start: %f End:%f FullResp:%d \n", fTimeElapse, fTimeOut, bFullRespRx);
+	} while ( fTimeElapse < fTimeOut && bFullRespRx != true);
+	printf("Out Execute loop\n");	
+	if (!bFullRespRx && fTimeElapse >= fTimeOut)
 	{
-		printf("Timeout Error occur, No response from ECU");
+		printf("Timeout Error occur, No response from ECU\n");
 	}
 	return vrxData;
 }

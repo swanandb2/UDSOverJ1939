@@ -58,5 +58,9 @@ std::vector<DTC> GetActiveDTCs()
 		}
 
 	}
+else
+{
+printf("No data from Tp layer");
+}
 	
 }
