@@ -68,7 +68,7 @@ int RxData(unsigned char* buffer)
 				return 0;
 			}
 
-			printf("TxData PGN = %x SA: %x DA: %x \n", PGN, frame.can_id, nSrc, nDest);
+			//printf("TxData PGN = %x SA: %x DA: %x \n", PGN, frame.can_id, nSrc, nDest);
 		}
 	}
 }
@@ -80,7 +80,7 @@ int TPInit()
 	struct can_frame frame;
 	struct ifreq ifr;
 
-	const char *ifname = "vcan0";
+	const char *ifname = "can0";
 
 	if ((g_socketID = socket(PF_CAN, SOCK_RAW, CAN_RAW)) < 0)
 	{
@@ -134,12 +134,13 @@ std::vector<unsigned char> TPExecuteRequest(int nMsgSize, unsigned char* pMsgDat
 	std::vector<unsigned char> vrxData;	
 	do
 	{
-		printf("************ Before RxData \n");
+		//printf("************ Before RxData \n");
 		int nData = RxData(rxBuff);		
-		printf("************ After RxData Size: %d \n", nData);
+		//printf("************ After RxData Size: %d \n", nData);
 		if (nData > 0 && nData <= 8)
 		{
 			int FrameType = rxBuff[0] & 0xF0;
+			printf("%x", FrameType);
 			switch (FrameType)
 			{
 				case SINGLE_FRAME:
@@ -150,11 +151,13 @@ std::vector<unsigned char> TPExecuteRequest(int nMsgSize, unsigned char* pMsgDat
 				break;
 				case FIRST_FRAME:
 				{
+					printf("******* Inside FF ***********8");
 					//UUDT
 					RespSize = rxBuff[1];
 					//Set offce as 2 Frame ID and size
 					for (size_t i = 2; i < nData; i++)
 					{
+						printf("\trxBuff[%d]: %X",i,rxBuff[i]);
 						vrxData.push_back(rxBuff[i]);
 					}
 					if (TxFlowControl())
