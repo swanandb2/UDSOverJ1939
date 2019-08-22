@@ -123,6 +123,15 @@ int TxFlowControl()
 	return TxData(sizeof(sData), sData);
 }
 
+void printBuffer(unsigned char* buffer, int nSize)
+{
+	printf("********** Buffer data Start ********************");
+	for (size_t i = 0; i < nSize; i++)
+	{
+		printf("\t buffer[%d]: %02X\n", i, buffer[i]);
+	}
+}
+
 //TBD 0x7F NRC 78 and 21
 std::vector<unsigned char> TPExecuteRequest(int nMsgSize, unsigned char* pMsgData)
 {
@@ -134,11 +143,10 @@ std::vector<unsigned char> TPExecuteRequest(int nMsgSize, unsigned char* pMsgDat
 	std::vector<unsigned char> vrxData;	
 	do
 	{
-		//printf("************ Before RxData \n");
-		int nData = RxData(rxBuff);		
-		//printf("************ After RxData Size: %d \n", nData);
-		if (nData > 0 && nData <= 8)
+		int nData = RxData(rxBuff);	
+		if (nData > 0)
 		{
+			printBuffer(rxBuff, sizeof(rxBuff));
 			int FrameType = rxBuff[0] & 0xF0;
 			printf("%x", FrameType);
 			switch (FrameType)
@@ -151,13 +159,12 @@ std::vector<unsigned char> TPExecuteRequest(int nMsgSize, unsigned char* pMsgDat
 				break;
 				case FIRST_FRAME:
 				{
-					printf("******* Inside FF ***********8");
 					//UUDT
 					RespSize = rxBuff[1];
+					printf("******* Inside FF DataSize:%d ***********\n", RespSize);
 					//Set offce as 2 Frame ID and size
 					for (size_t i = 2; i < nData; i++)
 					{
-						printf("\trxBuff[%d]: %X",i,rxBuff[i]);
 						vrxData.push_back(rxBuff[i]);
 					}
 					if (TxFlowControl())
@@ -182,7 +189,6 @@ std::vector<unsigned char> TPExecuteRequest(int nMsgSize, unsigned char* pMsgDat
 		{
 			bFullRespRx = true;
 		}
-		printf("In loop");
 	} while (start < end && bFullRespRx != true);
 
 	if (!bFullRespRx && start >= end)
